@@ -1,67 +1,61 @@
-name: Fetch Substack Articles
+const RSSParser = require('rss-parser');
+const TurndownService = require('turndown');
+const fs = require('fs');
+const path = require('path');
 
-on:
-  schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+const parser = new RSSParser();
+const turndown = new TurndownService();
 
-jobs:
-  fetch-and-convert:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+async function main() {
+  console.log('Fetching Substack RSS...');
+  const feed = await parser.parseURL('https://thefalloutwithtbs.substack.com/feed');
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+  if (!fs.existsSync('articles')) fs.mkdirSync('articles');
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+  const index = [];
 
-      - name: Install dependencies
-        run: npm install rss-parser turndown
+  for (const item of feed.items) {
+    const date = new Date(item.pubDate).toISOString().split('T')[0];
+    const slug = item.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
 
-      - name: Write fetch script
-        run: |
-          cat > fetch.js << 'SCRIPTEOF'
-          const RSSParser = require('rss-parser');
-          const TurndownService = require('turndown');
-          const fs = require('fs');
-          const path = require('path');
-          const parser = new RSSParser();
-          const turndown = new TurndownService();
-          async function main() {
-            console.log('Fetching Substack RSS...');
-            const feed = await parser.parseURL('https://thefalloutwithtbs.substack.com/feed');
-            if (!fs.existsSync('articles')) fs.mkdirSync('articles');
-            const index = [];
-            for (const item of feed.items) {
-              const date = new Date(item.pubDate).toISOString().split('T')[0];
-              const slug = item.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
-              const filename = date + '-' + slug + '.md';
-              const filepath = path.join('articles', filename);
-              const content = item['content:encoded'] || item.content || item.contentSnippet || '';
-              const markdown = turndown.turndown(content);
-              const frontmatter = '---\ntitle: "' + item.title.replace(/"/g, '\\"') + '"\ndate: "' + date + '"\nlink: "' + item.link + '"\n---\n\n';
-              fs.writeFileSync(filepath, frontmatter + markdown);
-              console.log('Wrote:', filename);
-              index.push({ title: item.title, date: date, slug: slug, filename: filename, link: item.link, excerpt: item.contentSnippet ? item.contentSnippet.slice(0, 200) : '' });
-            }
-            fs.writeFileSync('articles/index.json', JSON.stringify(index, null, 2));
-            console.log('Done! Wrote', index.length, 'articles');
-          }
-          main().catch(function(err) { console.error(err); process.exit(1); });
-          SCRIPTEOF
+    const filename = date + '-' + slug + '.md';
+    const filepath = path.join('articles', filename);
 
-      - name: Run fetch script
-        run: node fetch.js
+    const content = item['content:encoded'] || item.content || item.contentSnippet || '';
+    const markdown = turndown.turndown(content);
 
-      - name: Commit and push articles
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add articles/
-          git diff --staged --quiet || git commit -m "Update articles from Substack"
-          git push
+    const frontmatter = [
+      '---',
+      'title: "' + item.title.replace(/"/g, '\\"') + '"',
+      'date: "' + date + '"',
+      'link: "' + item.link + '"',
+      '---',
+      '',
+      ''
+    ].join('\n');
+
+    fs.writeFileSync(filepath, frontmatter + markdown);
+    console.log('Wrote:', filename);
+
+    index.push({
+      title: item.title,
+      date: date,
+      slug: slug,
+      filename: filename,
+      link: item.link,
+      excerpt: item.contentSnippet ? item.contentSnippet.slice(0, 200) : ''
+    });
+  }
+
+  fs.writeFileSync('articles/index.json', JSON.stringify(index, null, 2));
+  console.log('Done! Wrote', index.length, 'articles');
+}
+
+main().catch(function(err) {
+  console.error(err);
+  process.exit(1);
+});
