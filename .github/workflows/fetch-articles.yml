@@ -1,0 +1,99 @@
+name: Fetch Substack Articles
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Runs every 6 hours automatically
+  workflow_dispatch:  # Also allows manual trigger
+
+jobs:
+  fetch-and-convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install rss-parser turndown
+
+      - name: Fetch and convert articles
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          node << 'EOF'
+          const RSSParser = require('rss-parser');
+          const TurndownService = require('turndown');
+          const fs = require('fs');
+          const path = require('path');
+
+          const parser = new RSSParser();
+          const turndown = new TurndownService();
+
+          async function main() {
+            console.log('Fetching Substack RSS...');
+            const feed = await parser.parseURL('https://thefalloutwithtbs.substack.com/feed');
+            
+            // Create articles directory
+            if (!fs.existsSync('articles')) fs.mkdirSync('articles');
+
+            // Create index of all articles
+            const index = [];
+
+            for (const item of feed.items) {
+              const date = new Date(item.pubDate).toISOString().split('T')[0];
+              const slug = item.title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '')
+                .slice(0, 60);
+              
+              const filename = `${date}-${slug}.md`;
+              const filepath = path.join('articles', filename);
+
+              // Convert HTML content to markdown
+              const content = item['content:encoded'] || item.content || item.contentSnippet || '';
+              const markdown = turndown.turndown(content);
+
+              // Write markdown file with frontmatter
+              const frontmatter = `---
+title: "${item.title.replace(/"/g, '\\"')}"
+date: "${date}"
+link: "${item.link}"
+---
+
+`;
+              fs.writeFileSync(filepath, frontmatter + markdown);
+              console.log('Wrote:', filename);
+
+              index.push({
+                title: item.title,
+                date,
+                slug,
+                filename,
+                link: item.link,
+                excerpt: item.contentSnippet ? item.contentSnippet.slice(0, 200) : ''
+              });
+            }
+
+            // Write index.json for the website to use
+            fs.writeFileSync('articles/index.json', JSON.stringify(index, null, 2));
+            console.log('Done! Wrote', index.length, 'articles');
+          }
+
+          main().catch(err => { console.error(err); process.exit(1); });
+          EOF
+
+      - name: Commit and push articles
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add articles/
+          git diff --staged --quiet || git commit -m "Update articles from Substack"
+          git push
