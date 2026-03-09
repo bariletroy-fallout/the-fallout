@@ -27,9 +27,4 @@ jobs:
         run: node fetch.js
 
       - name: Commit and push articles
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add articles/
-          git diff --staged --quiet || git commit -m "Update articles from Substack"
-          git push
+        run: git config user.name "GitHub Actions" && git config user.email "actions@github.com" && git add articles/ && git commit -m "Update articles from Substack" --allow-empty && git push
