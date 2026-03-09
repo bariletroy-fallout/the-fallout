@@ -1,8 +1,6 @@
 name: Fetch Substack Articles
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,21 +8,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install dependencies
-        run: npm install rss-parser turndown
-
-      - name: Run fetch script
-        run: node fetch.js
-
-      - name: Commit and push articles
-        run: git config user.name "GitHub Actions" && git config user.email "actions@github.com" && git add articles/ && git commit -m "Update articles from Substack" --allow-empty && git push
+      - run: npm install rss-parser turndown
+      - run: node fetch.js
+      - run: git config user.name "GitHub Actions"
+      - run: git config user.email "actions@github.com"
+      - run: git add articles/
+      - run: git commit -m "Update articles" --allow-empty
+      - run: git push
