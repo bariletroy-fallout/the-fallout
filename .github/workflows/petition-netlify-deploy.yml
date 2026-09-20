@@ -1,0 +1,29 @@
+name: Deploy petition patch to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/petition-netlify-deploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Deploy petition site
+        working-directory: .netlify-petition
+        run: >
+          npx -y @netlify/mcp@latest
+          --site-id 45812bfa-10d8-415f-ac8c-2f07bc591994
+          --proxy-path "https://netlify-mcp.netlify.app/proxy/eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIn0..MR6zB-qoxqA05nt1.auQC4CIceQIlY3rinQDq9L3UzbSTaQSGkiqMTSB-vEyQOm8wEuyp9MpQ1QxUauH8cj-V7I8jKSdvjCFUGif1E7HTZug8_zALzNaC3L9C4ocd6eQpzTd9dZ6RrlZQ8Gd3pYbETPVdJGrigpDI0VhPVbLCjrv04bid3aiJmXTyeu__iteRukykqGB-dGf8lkE3eRp4Uha2PiIWUkYWlR7tvpDMUTclXh96v6zrX8DXpHUHY8k-Xy-i3W34Qankfr-Fdiz3VP_zaadu22slGZPkgvlvEkG6NcrVq2GtyLPwhYz8wjuxBCpaoscAFCcJJHCd--589iRwqy2uEdf7k7_-c9I19GmfvkkogUyhuAghveV6jqo7ZHwzt0kPrDvwm4ZsJEugiLC0.RkzX6xvkp0QRNCXxzqEa6g"
